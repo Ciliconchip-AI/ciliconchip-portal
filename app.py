@@ -1,5 +1,5 @@
 """
-Ciliconchip Portal - HR, Finance and the Resume Bank in one app (Powered by AI COE).
+Ciliconchip Portal - HR and Finance (Powered by AI COE). The Resume Bank is a separate app with separate data.
 """
 
 import base64
@@ -12,9 +12,9 @@ from types import SimpleNamespace
 import streamlit as st
 from cryptography.fernet import Fernet
 
-from src import ui_admin, ui_finance, ui_hr, ui_resume_bank
-from src.ai import load_embedder, profile_text, to_blob
-from src.db import ResumeDB, password_problem
+from src import ui_admin, ui_finance, ui_hr
+from src.auth import password_problem
+from src.database import make_engine
 from src.portal_db import PortalDB, today_ist
 from src.security import Vault
 from src.ui_common import card, ist, section
@@ -108,7 +108,7 @@ st.markdown(
 <div class="ats-title-container">
 <div class="ats-title">Ciliconchip Portal<br>
 <span class="ats-powered"><span class="sep">–</span><span class="txt">Powered by AI COE</span></span></div>
-<div class="ats-subtitle">HR, Finance and Talent Acquisition in one secure place.</div>
+<div class="ats-subtitle">HR and Finance in one secure place.</div>
 </div>
 </div>""",
     unsafe_allow_html=True,
@@ -117,7 +117,7 @@ st.markdown(
 
 def footer():
     st.markdown(
-        f'<div class="footer">Ciliconchip Portal – Powered by AI COE | Employee and candidate data is confidential '
+        f'<div class="footer">Ciliconchip Portal – Powered by AI COE | Employee data is confidential '
         f'and for internal use only. &nbsp;|&nbsp; {APP_VERSION}</div>',
         unsafe_allow_html=True,
     )
@@ -136,16 +136,16 @@ ENC_KEY = secret("PORTAL_ENCRYPTION_KEY") or os.environ.get("PORTAL_ENCRYPTION_K
 
 @st.cache_resource(show_spinner="Connecting to the database...")
 def connect(cfg_items, key):
-    rdb = ResumeDB(dict(cfg_items) if cfg_items else None)
+    engine = make_engine(dict(cfg_items) if cfg_items else None)
     if not key and not cfg_items:
         key = Fernet.generate_key().decode()   # local test mode only: a throw-away key
-    return rdb, PortalDB(rdb.engine, Vault(key))
+    return PortalDB(engine, Vault(key))
 
 
 mysql_cfg = secret("mysql")
 cfg_items = tuple(sorted(dict(mysql_cfg).items())) if mysql_cfg else None
 try:
-    rdb, pdb = connect(cfg_items, ENC_KEY)
+    pdb = connect(cfg_items, ENC_KEY)
 except Exception as exc:
     st.error("Could not connect to the MySQL database. Please check the connection details in the app's secrets, "
              "and that the database service is running (Aiven's free plan switches off when idle).")
@@ -200,8 +200,8 @@ if pdb.user_count() == 0:
             email = st.text_input("Your work email")
             pw1 = st.text_input("Choose a password", type="password", help="At least 8 characters, letters and numbers.")
             pw2 = st.text_input("Type it again", type="password")
-            extra = st.multiselect("Also give me these roles", ["HR Admin", "Finance Admin", "Recruiter"],
-                                   default=["HR Admin", "Finance Admin", "Recruiter"])
+            extra = st.multiselect("Also give me these roles", ["HR Admin", "Finance Admin"],
+                                   default=["HR Admin", "Finance Admin"])
             if st.form_submit_button("Create Admin Account", width="stretch"):
                 if APP_PASSWORD and not hmac.compare_digest(team_pw.encode(), str(APP_PASSWORD).encode()):
                     st.error("The setup password is not correct.")
@@ -277,7 +277,6 @@ ctx = SimpleNamespace(
     is_super="Super Admin" in roles, is_hr="HR Admin" in roles, is_fin="Finance Admin" in roles,
     is_manager=pdb.is_manager(user["email"]), vault_ready=pdb.vault.ready, settings=pdb.settings(),
 )
-rb_access = bool(roles & {"Super Admin", "Recruiter", "TA Viewer"})
 
 if not cfg_items:
     st.warning("Running on temporary local storage (no MySQL connection configured) with a throw-away encryption "
@@ -325,7 +324,7 @@ with top_r:
             st.session_state.clear()
             st.rerun()
 
-tab_names = ["Home", "HR", "Finance"] + (["Resume Bank"] if rb_access else []) + (["Admin"] if ctx.is_super else [])
+tab_names = ["Home", "HR", "Finance"] + (["Admin"] if ctx.is_super else [])
 tabs = dict(zip(tab_names, st.tabs(tab_names)))
 
 # ===================================================================
@@ -383,28 +382,6 @@ with tabs["HR"]:
 
 with tabs["Finance"]:
     ui_finance.render(ctx)
-
-if rb_access:
-    with tabs["Resume Bank"]:
-        @st.cache_resource(show_spinner="Loading the AI model (the first start after an update takes about a minute)...")
-        def get_ai():
-            try:
-                return load_embedder(), None
-            except Exception as exc:
-                return None, str(exc)
-
-        ai, ai_error = get_ai()
-        if ai is not None:
-            missing = rdb.needs_embedding(ai.name)
-            if missing:
-                with st.spinner(f"Building AI fingerprints for {len(missing)} saved resume(s)... (one-time)"):
-                    for i in range(0, len(missing), 32):
-                        batch = missing[i:i + 32]
-                        vecs = ai.encode([profile_text(r) for r in batch])
-                        rdb.set_embeddings([(r["id"], to_blob(v)) for r, v in zip(batch, vecs)], ai.name)
-        rb_user = {"email": user["email"], "full_name": user["full_name"]}
-        ui_resume_bank.render(rdb, ai, ai_error, rb_user, audit, IS_ADMIN=ctx.is_super,
-                              CAN_EDIT=bool(roles & {"Super Admin", "Recruiter"}))
 
 if ctx.is_super:
     with tabs["Admin"]:

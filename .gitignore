@@ -2,7 +2,7 @@
 __pycache__/
 *.pyc
 .streamlit/secrets.toml
-resume_bank_local.db
+portal_local.db
 *.log
 Thumbs.db
 .DS_Store

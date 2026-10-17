@@ -5,7 +5,7 @@ from datetime import timedelta
 import pandas as pd
 import streamlit as st
 
-from .db import temporary_password
+from .auth import temporary_password
 from .portal_db import PORTAL_ROLES
 from .ui_common import excel_bytes, flash, ist, section
 
@@ -25,10 +25,6 @@ ACTION_LABELS = {
     "payroll_discarded": "Discarded payroll draft", "payslip_downloaded": "Downloaded payslip",
     "payslips_exported": "Exported all payslips", "finance_settings_changed": "Changed finance settings",
     "report_exported": "Exported report", "audit_exported": "Exported audit log",
-    "resume_uploaded": "Uploaded resume", "duplicate_blocked": "Duplicate resume blocked",
-    "profile_updated": "Updated candidate profile", "resume_deleted": "Deleted resume", "resume_viewed": "Opened resume",
-    "resume_downloaded": "Downloaded resume", "resumes_downloaded": "Downloaded resumes (ZIP)",
-    "list_exported": "Exported candidate list", "search": "Searched resumes", "job_matched": "Matched a job",
 }
 
 
@@ -94,11 +90,11 @@ def render(ctx):
     with right:
         section("3.", "Add a sign-in without an employee record")
         st.caption("Employees normally get their sign-in when HR adds them. Use this only for people who are not "
-                   "on the payroll, e.g. an external recruiter who needs the Resume Bank.")
+                   "on the payroll, e.g. an external payroll consultant.")
         with st.form("adm_add", clear_on_submit=True):
             n = st.text_input("Full name")
             em = st.text_input("Email")
-            rl = st.multiselect("Roles", list(PORTAL_ROLES), default=["TA Viewer"])
+            rl = st.multiselect("Roles", list(PORTAL_ROLES))
             if st.form_submit_button("Add Sign-in", width="stretch"):
                 pw = temporary_password()
                 err = pdb.create_user(em, n, rl, pw, created_by=me["email"])

@@ -6,7 +6,7 @@ import pandas as pd
 import streamlit as st
 
 from .portal_db import PORTAL_ROLES, today_ist
-from .db import temporary_password
+from .auth import temporary_password
 from .security import mask
 from .ui_common import card, d, excel_bytes, flash, ist, section
 

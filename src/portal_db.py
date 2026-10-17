@@ -2,8 +2,7 @@
 Database layer for the Ciliconchip Portal: people and roles, employees, HR (policies, holidays, leave) and
 Finance (salary structures, tax regime, payroll runs, payslips), notifications and the audit log.
 
-Uses the same MySQL connection as the Resume Bank tables. Salary figures, payslips, PAN and bank details are
-stored encrypted (see security.py).
+Salary figures, payslips, tax declarations, PAN and bank details are stored encrypted (see security.py).
 """
 
 import re
@@ -19,8 +18,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects import mysql
 
-from .db import (MAX_FAILED_LOGINS, LOCK_MINUTES, check_password, hash_password, password_problem,  # noqa: F401
-                 temporary_password)
+from .auth import MAX_FAILED_LOGINS, LOCK_MINUTES, check_password, hash_password
 from .leave import DEFAULT_LEAVE_TYPES, LeaveType, balances, leave_days, lwp_days_in_month
 from .payroll import DEFAULT_SETTINGS
 from .security import Vault
@@ -31,11 +29,9 @@ BLOB = LargeBinary().with_variant(mysql.BLOB(), "mysql")
 # Everyone is an employee ("Resource"). These roles add access on top. Managers are recognised automatically
 # from the "hardline manager" field - no role needed.
 PORTAL_ROLES = {
-    "Super Admin": "Manages who can use the Portal and their roles; reads the audit log; full Resume Bank access",
+    "Super Admin": "Manages who can use the Portal and their roles; reads the audit log",
     "HR Admin": "Employees, policies, holidays, leave rules, all leave requests and balance corrections",
     "Finance Admin": "Salary structures, tax regime, payroll runs and all payslips",
-    "Recruiter": "Resume Bank: upload, search, match jobs, update profiles",
-    "TA Viewer": "Resume Bank: search, match jobs, view and download only",
 }
 LEAVE_STATUSES = ["Pending", "Approved", "Rejected", "Cancelled"]
 
